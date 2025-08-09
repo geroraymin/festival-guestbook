@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>청소년 축제 디지털 방명록 | 대화형 웹앱</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Neutrals (Slate, Zinc, Stone) -->
+    <!-- Application Structure Plan: 이 SPA는 소스 보고서에 설명된 애플리케이션을 시뮬레이션하는 역할 기반 대화형 대시보드로 구성됩니다. 사용자는 '관리자' 또는 '부스 운영자' 역할을 선택하여 로그인할 수 있습니다. 관리자 뷰는 전체 축제 통계에 대한 개요를 제공하며, 부스 운영자 뷰는 특정 부스의 대시보드와 참가자 정보를 입력하는 다단계 방명록 작성 모드 간에 전환할 수 있습니다. 이 구조는 보고서의 추상적인 기술 계획을 사용자가 직접 경험할 수 있는 구체적인 프로토타입으로 변환하여, 제안된 시스템의 기능과 사용자 흐름을 가장 효과적으로 전달하기 위해 선택되었습니다. -->
+    <!-- Visualization & Content Choices: 
+        - 전체 참여자 통계 (관리자): 목표(정보 제공, 비교) -> 동적 수치 카드, 도넛 차트(성별), 막대 차트(교급) -> 마우스오버 시 툴팁 표시 -> Chart.js -> 핵심 요약 지표(KPI)를 즉각적으로 전달하기 위함.
+        - 시간대별 참여 추이 (관리자): 목표(변화 표시) -> 실시간 업데이트되는 라인 차트 -> '라이브' 버튼으로 데이터 추가 시뮬레이션 -> Chart.js -> 보고서의 '실시간' 요구사항을 동적으로 시연하기 위함.
+        - 부스 운영자 모드 전환: 목표(기능 시연) -> '대시보드'/'방명록' 버튼 -> 클릭 시 해당 섹션 표시/숨김 -> Vanilla JS -> 보고서에 명시된 핵심 UI/UX 기능을 명확하게 보여주기 위함.
+        - 다단계 방명록 폼 (참가자): 목표(UX 흐름 시연) -> 단계별 폼, 진행률 표시줄 -> '다음/이전' 버튼으로 단계 이동, 최종 제출 시 차트 업데이트 -> Vanilla JS -> 보고서에서 강조된 사용자 중심의 단계별 입력 프로세스를 직접 체험하게 하기 위함.
+        - 기술 스택 정보: 목표(정보 제공) -> 구조화된 HTML 카드 -> 버튼 클릭으로 모달 표시 -> Vanilla JS -> UI 흐름에 속하지 않는 중요한 기술적 세부사항(암호화, 데이터 보존 등)을 깔끔하게 전달하기 위함.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        
+        /* Guestbook transition styles */
+        #guestbook-form-container { min-height: 380px; }
+        .step-card { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .hidden-step { opacity: 0; transform: translateX(20px); pointer-events: none; position: absolute; }
+        .visible-step { opacity: 1; transform: translateX(0); pointer-events: auto; position: static; }
+
+        .btn-primary { background-color: #3b82f6; color: white; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { background-color: #6b7280; color: white; }
+        .btn-secondary:hover { background-color: #4b5563; }
+        .btn-danger { background-color: #ef4444; color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-outline { border-color: #3b82f6; color: #3b82f6; }
+        .btn-outline:hover { background-color: #eff6ff; }
+        .tab-active { border-bottom-color: #3b82f6; color: #3b82f6; font-weight: 500; }
+        .tab-inactive { border-bottom-color: transparent; color: #6b7280; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="app" class="min-h-screen">
+        
+        <!-- Login Screen -->
+        <div id="login-view" class="flex flex-col items-center justify-center min-h-screen p-4">
+            <div class="w-full max-w-md text-center">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">청소년 축제 디지털 방명록</h1>
+                <p class="text-slate-600 mb-8">대화형 기술 아키텍처 시뮬레이터</p>
+                <div class="bg-white p-8 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-6">역할 선택하여 시작하기</h2>
+                    <p class="text-sm text-slate-500 mb-6">보고서에 명시된 '관리자' 또는 '부스 운영자' 역할을 선택하여 해당 기능과 대시보드를 체험해 보세요.</p>
+                    <div class="space-y-4">
+                        <button onclick="loginAs('admin')" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-primary">
+                            관리자로 로그인
+                        </button>
+                        <button onclick="loginAs('booth_operator')" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary">
+                            부스 운영자로 로그인
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-400 mt-8">본 페이지는 실제 운영 시스템이 아니며, '청소년 축제 디지털 방명록' 개발 요구서 및 기술 아키텍처를 기반으로 제작된 대화형 시뮬레이션입니다.</p>
+            </div>
+        </div>
+
+        <!-- Main App View (Hidden by default) -->
+        <div id="main-app-view" class="hidden">
+            <header class="bg-white shadow-sm sticky top-0 z-40">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between items-center h-16">
+                        <div class="flex items-center space-x-4">
+                            <svg class="w-8 h-8 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                            </svg>
+                            <h1 class="text-xl font-bold text-slate-800">디지털 방명록</h1>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span id="user-role-display" class="text-sm font-medium bg-blue-100 text-blue-800 px-3 py-1 rounded-full"></span>
+                            <button onclick="logout()" class="text-sm text-slate-500 hover:text-blue-600 font-medium transition">로그아웃</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="py-8">
+                <!-- Admin View -->
+                <div id="admin-view" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+                    <div>
+                        <div class="mb-8">
+                            <h2 class="text-2xl font-bold text-slate-900">총괄 대시보드</h2>
+                            <p class="mt-1 text-slate-600">축제 전체의 실시간 참여 현황을 요약하고 시각화하여 보여줍니다.</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div class="bg-white p-6 rounded-xl shadow">
+                                <h3 class="text-slate-500 font-medium">총 참여 인원</h3>
+                                <p id="total-participants" class="text-4xl font-bold mt-2 text-blue-600">0</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow">
+                                <h3 class="text-slate-500 font-medium">운영 부스 수</h3>
+                                <p id="total-booths" class="text-4xl font-bold mt-2 text-slate-800">0</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow">
+                                <h3 class="text-slate-500 font-medium">실시간 참여율 (분당)</h3>
+                                <p id="participants-per-minute" class="text-4xl font-bold mt-2 text-slate-800">0</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                            <div class="bg-white p-6 rounded-xl shadow">
+                                <h3 class="font-semibold text-slate-800">시간대별 참여 추이</h3>
+                                <p class="text-sm text-slate-500 mb-4">시간에 따른 참여자 수 변화를 보여줍니다.</p>
+                                <div class="chart-container h-80">
+                                    <canvas id="timeline-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow">
+                                <h3 class="font-semibold text-slate-800">성별 분포</h3>
+                                <p class="text-sm text-slate-500 mb-4">전체 참여자의 성비 통계입니다.</p>
+                                <div class="chart-container h-80">
+                                    <canvas id="gender-chart-admin"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow col-span-1 lg:col-span-2">
+                                <h3 class="font-semibold text-slate-800">교급별 분포</h3>
+                                <p class="text-sm text-slate-500 mb-4">참여 학생들의 교급 분포를 보여줍니다.</p>
+                                <div class="chart-container h-80">
+                                    <canvas id="school-level-chart-admin"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Booth Management -->
+                    <div id="booth-management-section">
+                        <div class="mb-8">
+                            <h2 class="text-2xl font-bold text-slate-900">부스 관리</h2>
+                            <p class="mt-1 text-slate-600">축제에서 운영할 부스를 생성, 조회, 삭제합니다.</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow">
+                            <h3 class="font-semibold text-lg mb-4">새 부스 추가</h3>
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <input id="new-booth-name" type="text" placeholder="부스 이름을 입력하세요 (예: VR 게임존)" class="flex-grow p-3 border border-slate-300 rounded-lg">
+                                <button onclick="addBooth()" class="py-3 px-6 rounded-lg font-semibold transition btn-primary">부스 추가</button>
+                            </div>
+                            <hr class="my-6">
+                            <h3 class="font-semibold text-lg mb-4">현재 운영 부스 목록</h3>
+                            <div id="booth-list" class="space-y-3">
+                                <!-- Booth items will be rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booth Operator View -->
+                <div id="booth-operator-view" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <!-- Booth Selection Screen -->
+                    <div id="booth-selection-view">
+                         <div class="text-center mb-8">
+                            <h2 class="text-2xl font-bold text-slate-900">부스 선택</h2>
+                            <p class="mt-1 text-slate-600">운영할 부스를 선택해 주세요.</p>
+                        </div>
+                        <div id="booth-selection-list" class="max-w-2xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Booth selection buttons will be rendered here -->
+                        </div>
+                    </div>
+
+                    <!-- Booth Dashboard/Guestbook Screen (hidden initially) -->
+                    <div id="booth-main-view" class="hidden">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                            <div>
+                                <h2 id="booth-title" class="text-2xl font-bold text-slate-900"></h2>
+                                <p class="mt-1 text-slate-600">현재 부스의 운영 현황을 확인하고 방명록을 작성할 수 있습니다.</p>
+                            </div>
+                            <div class="flex items-center border border-slate-200 bg-slate-100 p-1 rounded-lg mt-4 md:mt-0">
+                                <button id="btn-dashboard-mode" onclick="switchBoothMode('dashboard')" class="px-4 py-2 text-sm font-semibold rounded-md transition">대시보드</button>
+                                <button id="btn-guestbook-mode" onclick="switchBoothMode('guestbook')" class="px-4 py-2 text-sm font-semibold rounded-md transition">방명록 작성</button>
+                            </div>
+                        </div>
+
+                        <div id="booth-dashboard-mode">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div class="bg-white p-6 rounded-xl shadow">
+                                    <h3 class="text-slate-500 font-medium">현재 부스 참여 인원</h3>
+                                    <p id="booth-total-participants" class="text-4xl font-bold mt-2 text-blue-600">0</p>
+                                </div>
+                                <div class="bg-white p-6 rounded-xl shadow">
+                                    <h3 class="text-slate-500 font-medium">최근 10분 내 참여</h3>
+                                    <p id="booth-recent-participants" class="text-4xl font-bold mt-2 text-slate-800">0</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div class="bg-white p-6 rounded-xl shadow">
+                                    <h3 class="font-semibold text-slate-800">성별 분포 (현재 부스)</h3>
+                                    <div class="chart-container h-80"><canvas id="gender-chart-booth"></canvas></div>
+                                </div>
+                                <div class="bg-white p-6 rounded-xl shadow">
+                                    <h3 class="font-semibold text-slate-800">교급별 분포 (현재 부스)</h3>
+                                    <div class="chart-container h-80"><canvas id="school-level-chart-booth"></canvas></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="booth-guestbook-mode" class="hidden">
+                            <div class="bg-white p-6 sm:p-8 rounded-xl shadow max-w-2xl mx-auto">
+                                <div id="guestbook-form-container" class="relative overflow-hidden"></div>
+                                <div id="progress-bar-container" class="mt-8 hidden">
+                                    <div class="w-full bg-slate-200 rounded-full h-2.5">
+                                        <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%; transition: width 0.5s ease-in-out;"></div>
+                                    </div>
+                                    <p id="progress-text" class="text-center text-sm text-slate-500 mt-2"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            role: null,
+            currentView: 'login',
+            boothMode: 'dashboard',
+            selectedBoothId: null,
+            guestbookStep: 1,
+            formData: { name: '', gender: '', schoolLevel: '', birthDate: '' },
+            mockData: {
+                totalParticipants: 124,
+                participantsPerMinute: 3,
+                timeline: {
+                    labels: ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00'],
+                    data: [12, 35, 58, 88, 110, 124]
+                },
+                gender: { '남성': 68, '여성': 56 },
+                schoolLevel: { '초등': 25, '중등': 55, '고등': 40, '기타': 4 },
+                booths: [
+                    { id: 1, name: 'AI 체험 부스', total: 28, recent: 4, gender: { '남성': 15, '여성': 13 }, schoolLevel: { '초등': 5, '중등': 13, '고등': 9, '기타': 1 }},
+                    { id: 2, name: 'VR 게임존', total: 45, recent: 8, gender: { '남성': 25, '여성': 20 }, schoolLevel: { '초등': 10, '중등': 20, '고등': 15, '기타': 0 }},
+                    { id: 3, name: '코딩 교실', total: 15, recent: 2, gender: { '남성': 8, '여성': 7 }, schoolLevel: { '초등': 2, '중등': 5, '고등': 8, '기타': 0 }},
+                    { id: 4, name: '로봇 만들기', total: 36, recent: 5, gender: { '남성': 20, '여성': 16 }, schoolLevel: { '초등': 8, '중등': 17, '고등': 8, '기타': 3 }},
+                ],
+            }
+        };
+
+        const charts = {};
+
+        function init() {
+            document.getElementById('login-view').classList.remove('hidden');
+            document.getElementById('main-app-view').classList.add('hidden');
+        }
+
+        function loginAs(role) {
+            state.role = role;
+            state.currentView = 'main';
+            updateUI();
+        }
+
+        function logout() {
+            state.role = null;
+            state.currentView = 'login';
+            state.selectedBoothId = null;
+            Object.values(charts).forEach(chart => chart.destroy());
+            init();
+        }
+
+        function updateUI() {
+            const loginView = document.getElementById('login-view');
+            const mainAppView = document.getElementById('main-app-view');
+            const adminView = document.getElementById('admin-view');
+            const boothOperatorView = document.getElementById('booth-operator-view');
+            const userRoleDisplay = document.getElementById('user-role-display');
+
+            loginView.classList.toggle('hidden', state.currentView !== 'login');
+            mainAppView.classList.toggle('hidden', state.currentView !== 'main');
+
+            if (state.currentView === 'main') {
+                adminView.classList.toggle('hidden', state.role !== 'admin');
+                boothOperatorView.classList.toggle('hidden', state.role !== 'booth_operator');
+                userRoleDisplay.textContent = state.role === 'admin' ? '관리자' : '부스 운영자';
+
+                if (state.role === 'admin') {
+                    renderAdminView();
+                } else if (state.role === 'booth_operator') {
+                    renderBoothOperatorView();
+                }
+            }
+        }
+        
+        function renderAdminView() {
+            document.getElementById('total-participants').textContent = state.mockData.totalParticipants;
+            document.getElementById('participants-per-minute').textContent = state.mockData.participantsPerMinute;
+            document.getElementById('total-booths').textContent = state.mockData.booths.length;
+            
+            createTimelineChart();
+            createGenderChartAdmin();
+            createSchoolLevelChartAdmin();
+            renderBoothManagement();
+        }
+
+        function renderBoothManagement() {
+            const listContainer = document.getElementById('booth-list');
+            listContainer.innerHTML = '';
+            if (state.mockData.booths.length === 0) {
+                listContainer.innerHTML = `<p class="text-slate-500 text-center">생성된 부스가 없습니다.</p>`;
+                return;
+            }
+            state.mockData.booths.forEach(booth => {
+                const boothEl = document.createElement('div');
+                boothEl.className = 'flex items-center justify-between p-3 bg-slate-50 rounded-lg';
+                boothEl.innerHTML = `
+                    <span class="font-medium">${booth.name}</span>
+                    <button onclick="deleteBooth(${booth.id})" class="text-sm py-1 px-3 rounded-md transition btn-danger">삭제</button>
+                `;
+                listContainer.appendChild(boothEl);
+            });
+        }
+
+        function addBooth() {
+            const input = document.getElementById('new-booth-name');
+            const name = input.value.trim();
+            if (!name) {
+                alert('부스 이름을 입력해주세요.');
+                return;
+            }
+            const newId = state.mockData.booths.length > 0 ? Math.max(...state.mockData.booths.map(b => b.id)) + 1 : 1;
+            state.mockData.booths.push({
+                id: newId,
+                name: name,
+                total: 0,
+                recent: 0,
+                gender: { '남성': 0, '여성': 0 },
+                schoolLevel: { '초등': 0, '중등': 0, '고등': 0, '기타': 0 }
+            });
+            input.value = '';
+            renderAdminView();
+        }
+
+        function deleteBooth(boothId) {
+            state.mockData.booths = state.mockData.booths.filter(b => b.id !== boothId);
+            renderAdminView();
+        }
+
+        function renderBoothOperatorView() {
+            const selectionView = document.getElementById('booth-selection-view');
+            const mainView = document.getElementById('booth-main-view');
+
+            if (state.selectedBoothId === null) {
+                selectionView.classList.remove('hidden');
+                mainView.classList.add('hidden');
+                renderBoothSelection();
+            } else {
+                selectionView.classList.add('hidden');
+                mainView.classList.remove('hidden');
+                renderBoothDashboard();
+            }
+        }
+        
+        function renderBoothSelection() {
+            const listContainer = document.getElementById('booth-selection-list');
+            listContainer.innerHTML = '';
+            if (state.mockData.booths.length === 0) {
+                listContainer.innerHTML = `<p class="text-slate-500 text-center col-span-full">운영 가능한 부스가 없습니다. 관리자에게 문의하세요.</p>`;
+                return;
+            }
+            state.mockData.booths.forEach(booth => {
+                const button = document.createElement('button');
+                button.className = 'w-full text-left p-6 bg-white rounded-xl shadow hover:shadow-lg hover:bg-blue-50 transition';
+                button.onclick = () => selectBooth(booth.id);
+                button.innerHTML = `<h3 class="text-lg font-bold text-blue-600">${booth.name}</h3>`;
+                listContainer.appendChild(button);
+            });
+        }
+
+        function selectBooth(boothId) {
+            state.selectedBoothId = boothId;
+            state.boothMode = 'dashboard';
+            renderBoothOperatorView();
+        }
+
+        function switchBoothMode(mode) {
+            state.boothMode = mode;
+            renderBoothDashboard();
+        }
+
+        function renderBoothDashboard() {
+            const selectedBooth = state.mockData.booths.find(b => b.id === state.selectedBoothId);
+            if (!selectedBooth) return;
+
+            document.getElementById('booth-title').textContent = selectedBooth.name;
+
+            const dashboardMode = document.getElementById('booth-dashboard-mode');
+            const guestbookMode = document.getElementById('booth-guestbook-mode');
+            const btnDashboard = document.getElementById('btn-dashboard-mode');
+            const btnGuestbook = document.getElementById('btn-guestbook-mode');
+
+            dashboardMode.classList.toggle('hidden', state.boothMode !== 'dashboard');
+            guestbookMode.classList.toggle('hidden', state.boothMode !== 'guestbook');
+            
+            btnDashboard.classList.toggle('bg-white', state.boothMode === 'dashboard');
+            btnDashboard.classList.toggle('text-blue-600', state.boothMode === 'dashboard');
+            btnGuestbook.classList.toggle('bg-white', state.boothMode === 'guestbook');
+            btnGuestbook.classList.toggle('text-blue-600', state.boothMode === 'guestbook');
+
+            if(state.boothMode === 'dashboard') {
+                document.getElementById('booth-total-participants').textContent = selectedBooth.total;
+                document.getElementById('booth-recent-participants').textContent = selectedBooth.recent;
+                createGenderChartBooth(selectedBooth);
+                createSchoolLevelChartBooth(selectedBooth);
+            } else {
+                resetGuestbookForm();
+            }
+        }
+        
+        function createChart(canvasId, type, data, options) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (charts[canvasId]) charts[canvasId].destroy();
+            charts[canvasId] = new Chart(ctx, { type, data, options });
+        }
+
+        const commonChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, cornerRadius: 4 } }, scales: { y: { beginAtZero: true, grid: { color: '#e5e7eb' } }, x: { grid: { display: false } } } };
+
+        function createTimelineChart() { createChart('timeline-chart', 'line', { labels: state.mockData.timeline.labels, datasets: [{ label: '참여자 수', data: state.mockData.timeline.data, fill: true, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.3 }] }, commonChartOptions); }
+        function createGenderChartAdmin() { createChart('gender-chart-admin', 'doughnut', { labels: Object.keys(state.mockData.gender), datasets: [{ label: '성별 분포', data: Object.values(state.mockData.gender), backgroundColor: ['#3b82f6', '#ec4899'], hoverOffset: 4 }] }, {...commonChartOptions, scales: {}}); }
+        function createSchoolLevelChartAdmin() { createChart('school-level-chart-admin', 'bar', { labels: Object.keys(state.mockData.schoolLevel), datasets: [{ label: '교급별 참여자', data: Object.values(state.mockData.schoolLevel), backgroundColor: ['#10b981', '#f97316', '#8b5cf6', '#6b7280'] }] }, commonChartOptions); }
+        function createGenderChartBooth(boothData) { createChart('gender-chart-booth', 'pie', { labels: Object.keys(boothData.gender), datasets: [{ label: '성별 분포', data: Object.values(boothData.gender), backgroundColor: ['#3b82f6', '#ec4899'], hoverOffset: 4 }] }, {...commonChartOptions, scales: {}}); }
+        function createSchoolLevelChartBooth(boothData) { createChart('school-level-chart-booth', 'bar', { labels: Object.keys(boothData.schoolLevel), datasets: [{ label: '교급별 참여자', data: Object.values(boothData.schoolLevel), backgroundColor: ['#10b981', '#f97316', '#8b5cf6', '#6b7280'] }] }, commonChartOptions); }
+
+        const guestbookSteps = [ { id: 1, name: '동의' }, { id: 2, name: '이름' }, { id: 3, name: '성별' }, { id: 4, name: '교급' }, { id: 5, name: '생년월일' }, { id: 6, name: '확인' }, { id: 7, name: '완료' }];
+
+        function resetGuestbookForm() {
+            state.guestbookStep = 1;
+            state.formData = { name: '', gender: '', schoolLevel: '', birthDate: '' };
+            const container = document.getElementById('guestbook-form-container');
+            container.innerHTML = `<div id="step-1" class="step-card visible-step"><h3 class="text-xl font-bold text-center">개인정보 수집 및 이용 동의</h3><div class="mt-6 p-4 bg-slate-50 border rounded-lg text-sm text-slate-600 space-y-3"><p><strong>(주)OOO</strong>는 아래의 목적으로 개인정보를 수집 및 이용합니다.</p><ul class="list-disc list-inside space-y-1"><li><strong>수집 항목:</strong> 이름, 성별, 교급, 생년월일. <span class="text-blue-600 font-semibold">(참고: 이름, 생년월일은 전송 즉시 암호화됩니다.)</span></li><li><strong>수집 목적:</strong> 축제 참여자 통계 분석</li><li><strong>보유 기간:</strong> 수집일로부터 90일 <span class="text-red-600 font-semibold">(이후 자동 영구 파기)</span></li></ul></div><div class="mt-6"><p class="text-center font-medium mb-4">위 내용에 동의하십니까?</p><div class="flex space-x-4"><button onclick="handleConsent(true)" class="w-full py-3 rounded-lg font-semibold transition btn-primary">동의함</button><button onclick="handleConsent(false)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">동의하지 않음</button></div></div></div>`;
+            document.getElementById('progress-bar-container').classList.add('hidden');
+        }
+
+        function handleConsent(agreed) { if (agreed) goToStep(2); else { alert('동의가 필요합니다.'); switchBoothMode('dashboard'); } }
+
+        function goToStep(stepNumber) {
+            const oldStep = document.getElementById(`step-${state.guestbookStep}`);
+            if (oldStep) { oldStep.classList.remove('visible-step'); oldStep.classList.add('hidden-step'); }
+            state.guestbookStep = stepNumber;
+            let newStep = document.getElementById(`step-${stepNumber}`);
+            if (!newStep) { newStep = createStepElement(stepNumber); document.getElementById('guestbook-form-container').appendChild(newStep); }
+            setTimeout(() => { newStep.classList.remove('hidden-step'); newStep.classList.add('visible-step'); }, 50);
+            updateProgressBar();
+        }
+
+        function createStepElement(stepNumber) {
+            const div = document.createElement('div');
+            div.id = `step-${stepNumber}`;
+            div.className = 'step-card hidden-step';
+            let content = '';
+            switch(stepNumber) {
+                case 2: content = `<h3 class="text-xl font-bold text-center">이름을 입력해 주세요.</h3><input type="text" id="form-name" class="mt-6 w-full p-3 border rounded-lg text-center text-lg" placeholder="홍길동" value="${state.formData.name}" oninput="state.formData.name = this.value"><div class="mt-6 flex space-x-4"><button onclick="goToStep(1)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">이전</button><button onclick="goToStep(3)" class="w-full py-3 rounded-lg font-semibold transition btn-primary">다음</button></div>`; break;
+                case 3: content = `<h3 class="text-xl font-bold text-center">성별을 선택해 주세요.</h3><div class="mt-6 grid grid-cols-2 gap-4"><button onclick="selectOption('gender', '남성')" class="p-4 border rounded-lg text-lg transition ${state.formData.gender === '남성' ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}">남성</button><button onclick="selectOption('gender', '여성')" class="p-4 border rounded-lg text-lg transition ${state.formData.gender === '여성' ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}">여성</button></div><div class="mt-6 flex space-x-4"><button onclick="goToStep(2)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">이전</button><button onclick="goToStep(4)" class="w-full py-3 rounded-lg font-semibold transition btn-primary">다음</button></div>`; break;
+                case 4: content = `<h3 class="text-xl font-bold text-center">교급을 선택해 주세요.</h3><div class="mt-6 grid grid-cols-2 gap-4">${['초등', '중등', '고등', '기타'].map(l => `<button onclick="selectOption('schoolLevel', '${l}')" class="p-4 border rounded-lg text-lg transition ${state.formData.schoolLevel === l ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}">${l}</button>`).join('')}</div><div class="mt-6 flex space-x-4"><button onclick="goToStep(3)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">이전</button><button onclick="goToStep(5)" class="w-full py-3 rounded-lg font-semibold transition btn-primary">다음</button></div>`; break;
+                case 5: content = `<h3 class="text-xl font-bold text-center">생년월일을 입력해 주세요.</h3><input type="text" id="form-birthDate" class="mt-6 w-full p-3 border rounded-lg text-center text-lg" placeholder="YYYYMMDD (예: 20080101)" value="${state.formData.birthDate}" oninput="state.formData.birthDate = this.value"><div class="mt-6 flex space-x-4"><button onclick="goToStep(4)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">이전</button><button onclick="goToStep(6)" class="w-full py-3 rounded-lg font-semibold transition btn-primary">다음</button></div>`; break;
+                case 6: content = `<h3 class="text-xl font-bold text-center">입력 내용을 확인해 주세요.</h3><div class="mt-6 space-y-3 text-lg bg-slate-50 p-4 rounded-lg"><p><strong>이름:</strong> ${state.formData.name}</p><p><strong>성별:</strong> ${state.formData.gender}</p><p><strong>교급:</strong> ${state.formData.schoolLevel}</p><p><strong>생년월일:</strong> ${state.formData.birthDate}</p></div><div class="mt-6 flex space-x-4"><button onclick="goToStep(5)" class="w-full py-3 rounded-lg font-semibold transition btn-secondary">수정</button><button onclick="submitForm()" class="w-full py-3 rounded-lg font-semibold transition btn-primary">제출하기</button></div>`; break;
+                case 7: content = `<div class="text-center py-8"><svg class="w-16 h-16 text-green-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><h3 class="text-2xl font-bold">참여해 주셔서 감사합니다!</h3><p class="mt-2 text-slate-600">방명록 작성이 완료되었습니다.</p><button onclick="switchBoothMode('dashboard')" class="mt-8 py-3 px-6 rounded-lg font-semibold transition btn-primary">대시보드로 돌아가기</button></div>`; break;
+            }
+            div.innerHTML = content;
+            return div;
+        }
+
+        function selectOption(field, value) {
+            state.formData[field] = value;
+            goToStep(state.guestbookStep);
+            setTimeout(() => goToStep(state.guestbookStep + 1), 300);
+        }
+
+        function updateProgressBar() {
+            const barContainer = document.getElementById('progress-bar-container');
+            if (state.guestbookStep > 1 && state.guestbookStep < 7) {
+                barContainer.classList.remove('hidden');
+                const progress = ((state.guestbookStep - 1) / (guestbookSteps.length - 3)) * 100;
+                document.getElementById('progress-bar').style.width = `${progress}%`;
+                document.getElementById('progress-text').textContent = `진행률: ${Math.round(progress)}%`;
+            } else {
+                barContainer.classList.add('hidden');
+            }
+        }
+
+        function submitForm() {
+            const booth = state.mockData.booths.find(b => b.id === state.selectedBoothId);
+            if (!booth || !state.formData.gender || !state.formData.schoolLevel) return;
+            state.mockData.totalParticipants++;
+            booth.total++;
+            booth.recent++;
+            state.mockData.gender[state.formData.gender]++;
+            booth.gender[state.formData.gender]++;
+            state.mockData.schoolLevel[state.formData.schoolLevel]++;
+            booth.schoolLevel[state.formData.schoolLevel]++;
+            goToStep(7);
+        }
+
+        init();
+    </script>
+</body>
+</html>
