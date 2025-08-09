@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+  command = "echo 'Static site deployment'"
+
+[[redirects]]
+  from = "/*"
+  to = "/festival.html"
+  status = 200
+
+[build.environment]
+  NODE_VERSION = "18"
