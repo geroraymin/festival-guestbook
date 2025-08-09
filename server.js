@@ -3,6 +3,7 @@ const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
+const apiRouter = require('./routes/api');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,13 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(cors());
+
+// JSON 파싱 미들웨어
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// API 라우터
+app.use('/api', apiRouter);
 
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));
