@@ -6,6 +6,7 @@
     <title>청소년 축제 디지털 방명록 | 대화형 웹앱</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/api.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -52,15 +53,29 @@
                 <h1 class="text-3xl font-bold text-slate-900 mb-2">청소년 축제 디지털 방명록</h1>
                 <p class="text-slate-600 mb-8">대화형 기술 아키텍처 시뮬레이터</p>
                 <div class="bg-white p-8 rounded-xl shadow-lg">
-                    <h2 class="text-xl font-semibold mb-6">역할 선택하여 시작하기</h2>
-                    <p class="text-sm text-slate-500 mb-6">보고서에 명시된 '관리자' 또는 '부스 운영자' 역할을 선택하여 해당 기능과 대시보드를 체험해 보세요.</p>
-                    <div class="space-y-4">
-                        <button onclick="loginAs('admin')" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-primary">
-                            관리자로 로그인
+                    <h2 class="text-xl font-semibold mb-6">로그인</h2>
+                    <p class="text-sm text-slate-500 mb-6">축제 디지털 방명록 시스템에 로그인하세요.</p>
+                    <form id="login-form" class="space-y-4">
+                        <div>
+                            <label for="username" class="block text-sm font-medium text-slate-700 mb-1">사용자명</label>
+                            <input type="text" id="username" name="username" required 
+                                   class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                   placeholder="사용자명을 입력하세요">
+                        </div>
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-slate-700 mb-1">비밀번호</label>
+                            <input type="password" id="password" name="password" required
+                                   class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                   placeholder="비밀번호를 입력하세요">
+                        </div>
+                        <button type="submit" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-primary">
+                            로그인
                         </button>
-                        <button onclick="loginAs('booth_operator')" class="w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 btn-secondary">
-                            부스 운영자로 로그인
-                        </button>
+                    </form>
+                    <div id="login-error" class="mt-4 text-sm text-red-600 hidden"></div>
+                    <div class="mt-6 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                        <p><strong>기본 계정:</strong></p>
+                        <p>관리자: admin / admin123</p>
                     </div>
                 </div>
                 <p class="text-xs text-slate-400 mt-8">본 페이지는 실제 운영 시스템이 아니며, '청소년 축제 디지털 방명록' 개발 요구서 및 기술 아키텍처를 기반으로 제작된 대화형 시뮬레이션입니다.</p>
@@ -222,48 +237,68 @@
 
     <script>
         const state = {
-            role: null,
+            user: null,
             currentView: 'login',
             boothMode: 'dashboard',
             selectedBoothId: null,
             guestbookStep: 1,
             formData: { name: '', gender: '', schoolLevel: '', birthDate: '' },
-            mockData: {
-                totalParticipants: 124,
-                participantsPerMinute: 3,
-                timeline: {
-                    labels: ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00'],
-                    data: [12, 35, 58, 88, 110, 124]
-                },
-                gender: { '남성': 68, '여성': 56 },
-                schoolLevel: { '초등': 25, '중등': 55, '고등': 40, '기타': 4 },
-                booths: [
-                    { id: 1, name: 'AI 체험 부스', total: 28, recent: 4, gender: { '남성': 15, '여성': 13 }, schoolLevel: { '초등': 5, '중등': 13, '고등': 9, '기타': 1 }},
-                    { id: 2, name: 'VR 게임존', total: 45, recent: 8, gender: { '남성': 25, '여성': 20 }, schoolLevel: { '초등': 10, '중등': 20, '고등': 15, '기타': 0 }},
-                    { id: 3, name: '코딩 교실', total: 15, recent: 2, gender: { '남성': 8, '여성': 7 }, schoolLevel: { '초등': 2, '중등': 5, '고등': 8, '기타': 0 }},
-                    { id: 4, name: '로봇 만들기', total: 36, recent: 5, gender: { '남성': 20, '여성': 16 }, schoolLevel: { '초등': 8, '중등': 17, '고등': 8, '기타': 3 }},
-                ],
+            data: {
+                booths: [],
+                stats: {}
             }
         };
 
         const charts = {};
 
         function init() {
-            document.getElementById('login-view').classList.remove('hidden');
-            document.getElementById('main-app-view').classList.add('hidden');
+            // 로그인 상태 확인
+            const savedUser = localStorage.getItem('user');
+            if (savedUser && apiService.token) {
+                state.user = JSON.parse(savedUser);
+                state.currentView = 'main';
+                updateUI();
+            } else {
+                document.getElementById('login-view').classList.remove('hidden');
+                document.getElementById('main-app-view').classList.add('hidden');
+            }
+
+            // 로그인 폼 이벤트 리스너
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
         }
 
-        function loginAs(role) {
-            state.role = role;
-            state.currentView = 'main';
-            updateUI();
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            try {
+                const result = await apiService.login(username, password);
+                state.user = result.user;
+                state.currentView = 'main';
+                
+                errorDiv.classList.add('hidden');
+                updateUI();
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+            }
         }
 
         function logout() {
-            state.role = null;
+            apiService.logout();
+            state.user = null;
             state.currentView = 'login';
             state.selectedBoothId = null;
             Object.values(charts).forEach(chart => chart.destroy());
+            
+            // 폼 초기화
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('login-error').classList.add('hidden');
+            
             init();
         }
 
@@ -277,38 +312,65 @@
             loginView.classList.toggle('hidden', state.currentView !== 'login');
             mainAppView.classList.toggle('hidden', state.currentView !== 'main');
 
-            if (state.currentView === 'main') {
-                adminView.classList.toggle('hidden', state.role !== 'admin');
-                boothOperatorView.classList.toggle('hidden', state.role !== 'booth_operator');
-                userRoleDisplay.textContent = state.role === 'admin' ? '관리자' : '부스 운영자';
+            if (state.currentView === 'main' && state.user) {
+                adminView.classList.toggle('hidden', state.user.role !== 'admin');
+                boothOperatorView.classList.toggle('hidden', state.user.role !== 'booth_operator');
+                userRoleDisplay.textContent = state.user.role === 'admin' ? '관리자' : '부스 운영자';
 
-                if (state.role === 'admin') {
+                if (state.user.role === 'admin') {
                     renderAdminView();
-                } else if (state.role === 'booth_operator') {
+                } else if (state.user.role === 'booth_operator') {
                     renderBoothOperatorView();
                 }
             }
         }
         
-        function renderAdminView() {
-            document.getElementById('total-participants').textContent = state.mockData.totalParticipants;
-            document.getElementById('participants-per-minute').textContent = state.mockData.participantsPerMinute;
-            document.getElementById('total-booths').textContent = state.mockData.booths.length;
-            
-            createTimelineChart();
-            createGenderChartAdmin();
-            createSchoolLevelChartAdmin();
-            renderBoothManagement();
+        async function renderAdminView() {
+            try {
+                // 통계 데이터 로드
+                const stats = await apiService.getAllStats();
+                state.data.stats = stats;
+                
+                // 부스 데이터 로드
+                const booths = await apiService.getBooths();
+                state.data.booths = booths;
+                
+                // UI 업데이트
+                document.getElementById('total-participants').textContent = stats.totalParticipants || 0;
+                document.getElementById('participants-per-minute').textContent = calculateParticipantsPerMinute(stats.timelineStats);
+                document.getElementById('total-booths').textContent = stats.totalBooths || 0;
+                
+                createTimelineChart(stats.timelineStats);
+                createGenderChartAdmin(stats.genderStats);
+                createSchoolLevelChartAdmin(stats.schoolLevelStats);
+                renderBoothManagement();
+            } catch (error) {
+                console.error('관리자 뷰 렌더링 오류:', error);
+                showError('데이터를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        function calculateParticipantsPerMinute(timelineStats) {
+            if (!timelineStats || timelineStats.length === 0) return 0;
+            const totalToday = timelineStats.reduce((sum, item) => sum + item.count, 0);
+            return Math.round(totalToday / (24 * 60)); // 하루 평균
+        }
+
+        function showError(message) {
+            // 에러 표시 함수 (필요시 구현)
+            alert(message);
         }
 
         function renderBoothManagement() {
             const listContainer = document.getElementById('booth-list');
             listContainer.innerHTML = '';
-            if (state.mockData.booths.length === 0) {
+            
+            if (!state.data.booths || state.data.booths.length === 0) {
                 listContainer.innerHTML = `<p class="text-slate-500 text-center">생성된 부스가 없습니다.</p>`;
                 return;
             }
-            state.mockData.booths.forEach(booth => {
+            
+            state.data.booths.forEach(booth => {
                 const boothEl = document.createElement('div');
                 boothEl.className = 'flex items-center justify-between p-3 bg-slate-50 rounded-lg';
                 boothEl.innerHTML = `
@@ -319,29 +381,35 @@
             });
         }
 
-        function addBooth() {
+        async function addBooth() {
             const input = document.getElementById('new-booth-name');
             const name = input.value.trim();
+            
             if (!name) {
                 alert('부스 이름을 입력해주세요.');
                 return;
             }
-            const newId = state.mockData.booths.length > 0 ? Math.max(...state.mockData.booths.map(b => b.id)) + 1 : 1;
-            state.mockData.booths.push({
-                id: newId,
-                name: name,
-                total: 0,
-                recent: 0,
-                gender: { '남성': 0, '여성': 0 },
-                schoolLevel: { '초등': 0, '중등': 0, '고등': 0, '기타': 0 }
-            });
-            input.value = '';
-            renderAdminView();
+
+            try {
+                await apiService.createBooth(name);
+                input.value = '';
+                renderAdminView(); // 새로고침
+            } catch (error) {
+                alert(error.message);
+            }
         }
 
-        function deleteBooth(boothId) {
-            state.mockData.booths = state.mockData.booths.filter(b => b.id !== boothId);
-            renderAdminView();
+        async function deleteBooth(boothId) {
+            if (!confirm('정말로 이 부스를 삭제하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                await apiService.deleteBooth(boothId);
+                renderAdminView(); // 새로고침
+            } catch (error) {
+                alert(error.message);
+            }
         }
 
         function renderBoothOperatorView() {
@@ -423,9 +491,51 @@
 
         const commonChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, cornerRadius: 4 } }, scales: { y: { beginAtZero: true, grid: { color: '#e5e7eb' } }, x: { grid: { display: false } } } };
 
-        function createTimelineChart() { createChart('timeline-chart', 'line', { labels: state.mockData.timeline.labels, datasets: [{ label: '참여자 수', data: state.mockData.timeline.data, fill: true, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.3 }] }, commonChartOptions); }
-        function createGenderChartAdmin() { createChart('gender-chart-admin', 'doughnut', { labels: Object.keys(state.mockData.gender), datasets: [{ label: '성별 분포', data: Object.values(state.mockData.gender), backgroundColor: ['#3b82f6', '#ec4899'], hoverOffset: 4 }] }, {...commonChartOptions, scales: {}}); }
-        function createSchoolLevelChartAdmin() { createChart('school-level-chart-admin', 'bar', { labels: Object.keys(state.mockData.schoolLevel), datasets: [{ label: '교급별 참여자', data: Object.values(state.mockData.schoolLevel), backgroundColor: ['#10b981', '#f97316', '#8b5cf6', '#6b7280'] }] }, commonChartOptions); }
+        function createTimelineChart(timelineStats = []) {
+            const labels = timelineStats.map(item => item.hour) || [];
+            const data = timelineStats.map(item => item.count) || [];
+            
+            createChart('timeline-chart', 'line', { 
+                labels: labels, 
+                datasets: [{ 
+                    label: '참여자 수', 
+                    data: data, 
+                    fill: true, 
+                    borderColor: '#3b82f6', 
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                    tension: 0.3 
+                }] 
+            }, commonChartOptions); 
+        }
+
+        function createGenderChartAdmin(genderStats = {}) {
+            const labels = Object.keys(genderStats);
+            const data = Object.values(genderStats);
+            
+            createChart('gender-chart-admin', 'doughnut', { 
+                labels: labels, 
+                datasets: [{ 
+                    label: '성별 분포', 
+                    data: data, 
+                    backgroundColor: ['#3b82f6', '#ec4899'], 
+                    hoverOffset: 4 
+                }] 
+            }, {...commonChartOptions, scales: {}});
+        }
+
+        function createSchoolLevelChartAdmin(schoolLevelStats = {}) {
+            const labels = Object.keys(schoolLevelStats);
+            const data = Object.values(schoolLevelStats);
+            
+            createChart('school-level-chart-admin', 'bar', { 
+                labels: labels, 
+                datasets: [{ 
+                    label: '교급별 참여자', 
+                    data: data, 
+                    backgroundColor: ['#10b981', '#f97316', '#8b5cf6', '#6b7280'] 
+                }] 
+            }, commonChartOptions);
+        }
         function createGenderChartBooth(boothData) { createChart('gender-chart-booth', 'pie', { labels: Object.keys(boothData.gender), datasets: [{ label: '성별 분포', data: Object.values(boothData.gender), backgroundColor: ['#3b82f6', '#ec4899'], hoverOffset: 4 }] }, {...commonChartOptions, scales: {}}); }
         function createSchoolLevelChartBooth(boothData) { createChart('school-level-chart-booth', 'bar', { labels: Object.keys(boothData.schoolLevel), datasets: [{ label: '교급별 참여자', data: Object.values(boothData.schoolLevel), backgroundColor: ['#10b981', '#f97316', '#8b5cf6', '#6b7280'] }] }, commonChartOptions); }
 
@@ -486,17 +596,32 @@
             }
         }
 
-        function submitForm() {
-            const booth = state.mockData.booths.find(b => b.id === state.selectedBoothId);
-            if (!booth || !state.formData.gender || !state.formData.schoolLevel) return;
-            state.mockData.totalParticipants++;
-            booth.total++;
-            booth.recent++;
-            state.mockData.gender[state.formData.gender]++;
-            booth.gender[state.formData.gender]++;
-            state.mockData.schoolLevel[state.formData.schoolLevel]++;
-            booth.schoolLevel[state.formData.schoolLevel]++;
-            goToStep(7);
+        async function submitForm() {
+            if (!state.formData.name || !state.formData.gender || !state.formData.schoolLevel || !state.formData.birthDate) {
+                alert('모든 필드를 입력해주세요.');
+                return;
+            }
+
+            try {
+                await apiService.createGuestbookEntry({
+                    booth_id: state.selectedBoothId,
+                    name: state.formData.name,
+                    gender: state.formData.gender,
+                    school_level: state.formData.schoolLevel,
+                    birth_date: state.formData.birthDate
+                });
+                
+                goToStep(7);
+                
+                // 통계 새로고침 (부스 운영자 뷰)
+                if (state.user.role === 'booth_operator') {
+                    setTimeout(() => {
+                        renderBoothDashboard();
+                    }, 1000);
+                }
+            } catch (error) {
+                alert(error.message);
+            }
         }
 
         init();
